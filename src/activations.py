@@ -30,20 +30,16 @@ class ReLU:
 
 class Softmax:
     name = "softmax"
+
     @staticmethod
     def forward(z):
-        z_shift = z - np.max(z, axis=1, keepdims=True)
-        exp_z = np.exp(z_shift)
-        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+        z = z - np.max(z, axis=1, keepdims=True)
+        e = np.exp(z)
+        return e / np.sum(e, axis=1, keepdims=True)
+
     @staticmethod
     def backward(a, grad_a):
-        batch, n = a.shape
-        grad_z = np.empty_like(a)
-        for i in range(batch):
-            s = a[i].reshape(-1, 1)
-            J = np.diagflat(s) - s @ s.T
-            grad_z[i] = J @ grad_a[i]
-        return grad_z
+        return grad_a
 
 def get_activation(name):
     name = name.lower()
