@@ -1,49 +1,51 @@
 import numpy as np
-from src.activations import ActivationFunction
-from src.utils import initialize_weights
+from .activations import get_activation
 
-class Layer:
-    
-    def __init__(self, input_dim, output_dim, activation: str = "sigmoid"):
+def he_init(input_dim, output_dim):
+    std = np.sqrt(2.0 / input_dim)
+    return np.random.randn(input_dim, output_dim) * std, np.zeros((1, output_dim))
+
+def xavier_init(input_dim, output_dim):
+    std = np.sqrt(1.0 / input_dim)
+    return np.random.randn(input_dim, output_dim) * std, np.zeros((1, output_dim))
+
+def initialize_weights(input_dim, output_dim, activation):
+    if activation.lower() == "relu":
+        return he_init(input_dim, output_dim)
+    return xavier_init(input_dim, output_dim)
+
+class Dense:
+    def __init__(self, input_dim, output_dim, activation="sigmoid"):
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.activation_name = activation
         self.W, self.b = initialize_weights(input_dim, output_dim, activation)
-        self.activation = activation
+        self.activation = get_activation(activation)
         self.x = None
         self.z = None
-        self.dW = np.zeros((output_dim, input_dim))
+        self.a = None
+        self.dW = np.zeros((input_dim, output_dim))
         self.db = np.zeros((1, output_dim))
-    
+
     def forward(self, x):
-        """Realiza la pasada hacia adelante de la capa."""
         self.x = x
         self.z = x @ self.W + self.b
-        
-        if self.activation == "sigmoid":
-            return ActivationFunction.sigmoid(self.z)
-        elif self.activation == "relu":
-            return ActivationFunction.relu(self.z)
-        elif self.activation == "softmax":
-            return ActivationFunction.softmax(self.z)
-        elif self.activation == "tanh":
-            return ActivationFunction.tanh(self.z)
-        else:
-            return self.z  # Sin activación
-    
-    def backward(self, dA):
-        if self.activation == "sigmoid":
-            dZ = dA * ActivationFunction.sigmoid_grad(self.z)
-        elif self.activation == "relu":
-            dZ = dA * ActivationFunction.relu_grad(self.z)
-        elif self.activation == "tanh":
-            dZ = dA * ActivationFunction.tanh_grad(self.z)
-        else:
-            dZ = dA  # Sin activación
-        m = self.x.shape[0]
-        self.dW = (self.x.T @ dZ) / m
-        self.db = np.sum(dZ, axis=0, keepdims=True) / m
-        return dZ @ self.W.T
-    
+        self.a = self.activation.forward(self.z)
+        return self.a
+
+    def backward(self, grad_a):
+        grad_z = self.activation.backward(self.a, grad_a)
+        self.dW = self.x.T @ grad_z
+        self.db = np.sum(grad_z, axis=0, keepdims=True)
+        grad_x = grad_z @ self.W.T
+        return grad_x
+
     def params(self):
-        return {'W': self.W, 'b': self.b}
-    
+        return [self.W, self.b]
+
     def grads(self):
-        return {'dW': self.dW, 'db': self.db}
+        return [self.dW, self.db]
+
+    def zero_grad(self):
+        self.dW.fill(0.0)
+        self.db.fill(0.0)

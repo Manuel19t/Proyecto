@@ -1,26 +1,20 @@
 import numpy as np
+import pandas as pd
 from pathlib import Path
-from src.utils import split_data
-from src.utils import preprocess_data
-from src.utils import one_hot_encode
 
-SCRIPT_DIR = Path(__file__).parent
-DEFAULT_IRIS_PATH = SCRIPT_DIR / 'IRIS.csv'
+SPECIES_TO_ID = {"Iris-setosa":0, "Iris-versicolor":1, "Iris-virginica":2}
+CLASS_NAMES = ["Iris-setosa", "Iris-versicolor", "Iris-virginica"]
 
-def load_iris_data(path=DEFAULT_IRIS_PATH, 
-                   train_rat=0.8, val_rat=0.1, test_rat=0.1, 
-                   random_seed=None, shuffle=True):
-    # Load the dataset from a CSV file
-    data = np.loadtxt(path, delimiter=',', dtype=str, skiprows=1)
-    X = data[:, :-1].astype(float)  # Features
-    y = data[:, -1]                 # Labels
-    
-    class_labels = np.unique(y)
-    label_to_index = {label: index for index, label in enumerate(class_labels)}
-    y = np.array([label_to_index[label] for label in y])
-    
-    X = preprocess_data(X)
-    y = one_hot_encode(y, len(class_labels))
-    
-    return split_data(X, y, train_rat, val_rat, test_rat, random_seed, shuffle)
-    
+def load_iris_csv(path=None):
+    # base del proyecto = carpeta padre de data/
+    project_root = Path(__file__).resolve().parent.parent
+
+    if path is None:
+        csv_path = project_root / "data" / "IRIS.csv"
+    else:
+        csv_path = Path(path)
+
+    df = pd.read_csv(csv_path)
+    X = df[["sepal_length","sepal_width","petal_length","petal_width"]].to_numpy(np.float32)
+    y = df["species"].map(SPECIES_TO_ID).to_numpy(dtype=int)
+    return X, y, CLASS_NAMES

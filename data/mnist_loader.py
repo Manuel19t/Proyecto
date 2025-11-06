@@ -1,26 +1,75 @@
+
 import numpy as np
+import gzip, struct, urllib.request, os
 from pathlib import Path
-from src.utils import split_data
-from src.utils import preprocess_data
-from src.utils import one_hot_encode
 
-SCRIPT_DIR = Path(__file__).parent
-DEFAULT_MNIST_TEST_PATH = SCRIPT_DIR / 'fashion-mnist_test.csv'
-DEFAULT_MNIST_TRAIN_PATH = SCRIPT_DIR / 'fashion-mnist_train.csv'
+URL_BASES = [
+    "http://yann.lecun.com/exdb/mnist/",
+    # Fallback mirrors (kept in case the main host is slow/unavailable)
+    "https://storage.googleapis.com/cvdf-datasets/mnist/",
+]
 
-def load_mnist_data(train_path=DEFAULT_MNIST_TRAIN_PATH,
-                    test_path=DEFAULT_MNIST_TEST_PATH, 
-                    train_rat=0.8, val_rat=0.1, test_rat=0.1,
-                    random_seed=None, shuffle=True):
-    
-    train_data = np.loadtxt(train_path, delimiter=',', dtype=int, skiprows=1)
-    test_data = np.loadtxt(test_path, delimiter=',', dtype=int, skiprows=1)
-    data = np.vstack((train_data, test_data)) # Combina los datos de entrenamiento y prueba
-    
-    X = data[:, 1:].astype(int)  # Features
-    y = data[:, 0].astype(int) # Labels
-    
-    X = preprocess_data(X)
-    y = one_hot_encode(y, 10)
-    
-    return split_data(X, y, train_rat, val_rat, test_rat, random_seed, shuffle)
+FILES = {
+    "train_images": "train-images-idx3-ubyte.gz",
+    "train_labels": "train-labels-idx1-ubyte.gz",
+    "test_images":  "t10k-images-idx3-ubyte.gz",
+    "test_labels":  "t10k-labels-idx1-ubyte.gz",
+}
+
+def _download_file(fname: str, outdir: Path) -> Path:
+    outdir.mkdir(parents=True, exist_ok=True)
+    dest = outdir / fname
+    if dest.exists():
+        return dest
+    last_err = None
+    for base in URL_BASES:
+        url = base + fname
+        try:
+            urllib.request.urlretrieve(url, dest.as_posix())
+            return dest
+        except Exception as e:
+            last_err = e
+            continue
+    raise RuntimeError(f"No se pudo descargar {fname}: {last_err}")
+
+def _read_idx_images(path: Path) -> np.ndarray:
+    with gzip.open(path, 'rb') as f:
+        _, num, rows, cols = struct.unpack('>IIII', f.read(16))
+        data = np.frombuffer(f.read(), dtype=np.uint8)
+    return data.reshape(num, rows*cols).astype(np.float32) / 255.0
+
+def _read_idx_labels(path: Path) -> np.ndarray:
+    with gzip.open(path, 'rb') as f:
+        _, num = struct.unpack('>II', f.read(8))
+        data = np.frombuffer(f.read(), dtype=np.uint8)
+    return data.astype(int)
+
+def download_and_load_mnist(data_subdir: str = "mnist", cache_npz: bool = True):
+    """
+    Descarga si es necesario los ficheros IDX a data/<data_subdir>/ y devuelve (X, y).
+    - X shape: (70000, 784) en float32 normalizado a [0,1]
+    - y shape: (70000,) en int
+    No usa sklearn.
+    """
+    base_dir = Path(__file__).resolve().parent / data_subdir
+    base_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = base_dir / "mnist.npz"
+
+    if cache_npz and cache_path.exists():
+        cached = np.load(cache_path)
+        return cached["X"], cached["y"]
+
+    paths = {k: _download_file(v, base_dir) for k, v in FILES.items()}
+
+    X_train = _read_idx_images(paths["train_images"])
+    y_train = _read_idx_labels(paths["train_labels"])
+    X_test  = _read_idx_images(paths["test_images"])
+    y_test  = _read_idx_labels(paths["test_labels"])
+
+    X = np.vstack([X_train, X_test]).astype(np.float32)
+    y = np.concatenate([y_train, y_test]).astype(int)
+
+    if cache_npz:
+        np.savez_compressed(cache_path, X=X, y=y)
+
+    return X, y

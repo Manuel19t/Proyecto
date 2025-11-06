@@ -1,58 +1,62 @@
 import numpy as np
-from src.utils import plot_loss_curve
+from .losses import get_loss
+from .utils import accuracy
 
 class Trainer:
-    
-    def __init__(self, model, optimizer, loss_fn, loss_grad):
-        self.model = model
+    def __init__(self, network, optimizer, loss="cross_entropy"):
+        self.network = network
         self.optimizer = optimizer
-        self.loss_fn = loss_fn
-        self.loss_grad = loss_grad
-        
-    def train(self, x_train, y_train, x_val=None, y_val=None, epochs=10, batch_size=64):
-        history = {"train_loss": [], "val_loss": []}
-        num_samples = x_train.shape[0]
-        for epoch in range(epochs):
-            perm = np.random.permutation(num_samples)
-            x_train = x_train[perm]
-            y_train = y_train[perm]
-            total_loss = 0
-            batches = 0
-            
-            for i in range(0, num_samples, batch_size):
-                x_batch = x_train[i:i+batch_size]
-                y_batch = y_train[i:i+batch_size]
-                
-                y_pred = self.model.forward(x_batch)
-                loss = self.loss_fn(y_batch, y_pred)
-                total_loss += loss
-                batches += 1
+        self.loss_fn = get_loss(loss)
 
-                loss_gradient = self.loss_grad(y_batch, y_pred)
-                self.model.backward(loss_gradient)
-                
-                params, grads = {}, {}
-                
-                for j, layer in enumerate(self.model.layers):
-                    params[f"W{j}"] = layer.W
-                    params[f"b{j}"] = layer.b
-                    grads[f"W{j}"] = layer.dW
-                    grads[f"b{j}"] = layer.db
-                
-                self.optimizer.update(params, grads)
-            
-            avg_loss = total_loss / batches
-            history["train_loss"].append(avg_loss)
-            
-            if x_val is not None and y_val is not None:
-                y_val_pred = self.model.forward(x_val)
-                val_loss = self.loss_fn(y_val, y_val_pred)
-                history["val_loss"].append(val_loss)
-                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_loss:.4f}, Val Loss: {val_loss:.4f}")
+    def _iterate_minibatches(self, X, y, batch_size, shuffle=True):
+        N = X.shape[0]
+        indices = np.arange(N)
+        if shuffle:
+            np.random.shuffle(indices)
+        for start in range(0, N, batch_size):
+            end = min(start + batch_size, N)
+            batch_idx = indices[start:end]
+            yield X[batch_idx], y[batch_idx]
+
+    def train(self, X_train, y_train, X_val=None, y_val=None, epochs=10, batch_size=64, classification=True, verbose=True):
+        history = {"train_loss": [], "val_loss": []}
+        if classification:
+            history["train_acc"] = []
+            history["val_acc"] = []
+
+        for epoch in range(1, epochs + 1):
+            train_losses = []
+            train_accs = []
+            for Xb, yb in self._iterate_minibatches(X_train, y_train, batch_size, shuffle=True):
+                out = self.network.forward(Xb)
+                loss = self.loss_fn.forward(yb, out)
+                train_losses.append(loss)
+                grad_out = self.loss_fn.backward(yb, out)
+                self.network.zero_grad()
+                self.network.backward(grad_out)
+                self.optimizer.update(self.network.params(), self.network.grads())
+                if classification:
+                    train_accs.append(accuracy(yb, out))
+
+            history["train_loss"].append(float(np.mean(train_losses)))
+            if classification:
+                history["train_acc"].append(float(np.mean(train_accs)) if train_accs else 0.0)
+
+            if X_val is not None and y_val is not None:
+                val_out = self.network.forward(X_val)
+                vloss = self.loss_fn.forward(y_val, val_out)
+                history["val_loss"].append(float(vloss))
+                if classification:
+                    history["val_acc"].append(float(accuracy(y_val, val_out)))
             else:
-                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_loss:.4f}")
-        
-        plot_loss_curve(history)
-        
+                history["val_loss"].append(None)
+                if classification:
+                    history["val_acc"].append(None)
+
+            if verbose:
+                if classification:
+                    print(f"Epoch {epoch:03d} | loss {history['train_loss'][-1]:.4f} | acc {history['train_acc'][-1]:.4f} | val_loss {history['val_loss'][-1]} | val_acc {history['val_acc'][-1]}")
+                else:
+                    print(f"Epoch {epoch:03d} | loss {history['train_loss'][-1]:.4f} | val_loss {history['val_loss'][-1]}")
+
         return history
-    
