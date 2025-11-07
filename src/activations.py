@@ -1,5 +1,14 @@
 import numpy as np
 
+class Linear:
+    name = "linear"
+    @staticmethod
+    def forward(z):
+        return z
+    @staticmethod
+    def backward(a, grad_a):
+        return grad_a
+
 class Sigmoid:
     name = "sigmoid"
     @staticmethod
@@ -51,4 +60,6 @@ def get_activation(name):
         return ReLU
     if name == "softmax":
         return Softmax
+    if name == "linear":
+        return Linear
     raise ValueError(f"Unknown activation: {name}")

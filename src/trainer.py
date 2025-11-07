@@ -22,9 +22,14 @@ class Trainer:
               batch_size=64, classification=True, verbose=True, early_stopping=False, 
               patience=5, min_delta=0.0):
         history = {"train_loss": [], "val_loss": []}
+        
         if classification:
             history["train_acc"] = []
             history["val_acc"] = []
+        else:
+            history["train_r2"] = []
+            if X_val is not None:
+                history["val_r2"] = []
             
         best_val_loss = float('inf')
         no_improve_epochs = 0
@@ -46,11 +51,20 @@ class Trainer:
                                                 
             train_loss = float(np.mean(train_losses))
             history["train_loss"].append(train_loss)
+            
             if classification:
                 history["train_acc"].append(float(np.mean(train_accs)) if train_accs else 0.0)
+            else:
+                y_train_pred = self.network.forward(X_train, training=False)
+                ss_res = np.sum((y_train - y_train_pred) ** 2)
+                ss_tot = np.sum((y_train - np.mean(y_train, axis=0)) ** 2)
+                train_r2 = 1 - ss_res / ss_tot
+                history["train_r2"].append(train_r2)
 
             val_loss = None
             val_acc = None
+            val_r2 = None
+            
             if X_val is not None and y_val is not None:
                 val_out = self.network.forward(X_val, training=False)
                 val_loss = float(self.loss_fn.forward(y_val, val_out))
@@ -58,10 +72,18 @@ class Trainer:
                 if classification:
                     val_acc = float(accuracy(y_val, val_out))
                     history["val_acc"].append(val_acc)
+                else:
+                    ss_res_val = np.sum((y_val - val_out) ** 2)
+                    ss_tot_val = np.sum((y_val - np.mean(y_val, axis=0)) ** 2)
+                    val_r2 = 1 - ss_res_val / ss_tot_val
+                    history["val_r2"].append(val_r2)
             else:
                 history["val_loss"].append(None)
                 if classification:
                     history["val_acc"].append(None)
+                else:
+                    if X_val is not None:
+                        history["val_r2"].append(None)
 
             if verbose:
                 if classification:
@@ -69,7 +91,9 @@ class Trainer:
                           f"loss {history['train_loss'][-1]:.4f} | acc {history['train_acc'][-1]:.4f} | " +
                           f"val_loss {history['val_loss'][-1]} | val_acc {history['val_acc'][-1]}")
                 else:
-                    print(f"Epoch {epoch:03d} | loss {history['train_loss'][-1]:.4f} | val_loss {history['val_loss'][-1]}")
+                    print(f"Epoch {epoch:03d} | " +
+                          f"loss {history['train_loss'][-1]:.4f} | score {history['train_r2'][-1]:.4f} | " +
+                          f"val_loss {history['val_loss'][-1]} | val_score {history['val_r2'][-1]}")
             
             if early_stopping and X_val is not None and y_val is not None:
                 if val_loss < best_val_loss - min_delta:
@@ -85,3 +109,4 @@ class Trainer:
                             np.copyto(param, best_param)
                         break
         return history
+    

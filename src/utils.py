@@ -34,7 +34,7 @@ def fit_minmax(X):
     X_min = X.min(axis=0)
     X_max = X.max(axis=0)
     denom = np.where((X_max - X_min) == 0, 1e-8, (X_max - X_min))
-    return X_min, denom
+    return X_min, X_max, denom
 
 
 def transform_minmax(X, X_min, denom):
@@ -50,23 +50,32 @@ def accuracy(y_true_onehot, y_pred_probs):
 def plot_curves(history, title_prefix=""):
     epochs = len(history["train_loss"])
     x = np.arange(epochs)
+    
+    if "train_acc" in history:
+        fig, axs = plt.subplots(2, 1, figsize=(7, 7))
+    else:
+        fig, axs = plt.subplots(1, 1, figsize=(7, 5))
+        axs = [axs]  # para tratar axs[0] igual
 
-    fig, axs = plt.subplots(2, 1, figsize=(7, 7))
-
-    axs[0].plot(x, history["train_loss"], label="train")
-    axs[0].plot(x, history["val_loss"], label="val")
+    axs[0].plot(x, history["train_loss"], label="train_loss")
+    if history["val_loss"] is not None and \
+       all(v is not None for v in history["val_loss"]):
+        axs[0].plot(x, history["val_loss"], label="val_loss")
     axs[0].set_title(f"{title_prefix} Loss")
-    axs[0].set_ylabel("loss")
-    axs[0].set_xlabel("epoch")
+    axs[0].set_xlabel("Epoch")
+    axs[0].set_ylabel("Loss")
     axs[0].legend()
+    
+    if "train_acc" in history:
+        axs[1].plot(x, history["train_acc"], label="train_acc")
+        if "val_acc" in history:
+            axs[1].plot(x, history["val_acc"], label="val_acc")
+        axs[1].set_title(f"{title_prefix} Accuracy")
+        axs[1].set_xlabel("Epoch")
+        axs[1].set_ylabel("Accuracy")
+        axs[1].legend()
 
-    axs[1].plot(x, history["train_acc"], label="train")
-    axs[1].plot(x, history["val_acc"], label="val")
-    axs[1].set_title(f"{title_prefix} Accuracy")
-    axs[1].set_ylabel("accuracy")
-    axs[1].set_xlabel("epoch")
-    axs[1].legend()
-
+    plt.tight_layout()
     plt.show()
 
 def confusion_matrix(y_true_onehot, y_pred_probs, num_classes):
@@ -102,4 +111,20 @@ def show_predictions(images, y_true, y_pred, labels, rows=3, cols=3):
             axs[r, c].set_title(f"T:{labels[y_true[idx]]} P:{labels[y_pred[idx]]}")
             axs[r, c].axis("off")
             idx += 1
+    plt.show()
+
+def plot_regression_predictions(y_true, y_pred, title="Regression Predictions"):
+
+    plt.figure(figsize=(6,6))
+    plt.scatter(y_true, y_pred, alpha=0.7)
+    plt.xlabel("True values")
+    plt.ylabel("Predicted values")
+    plt.title(title)
+    
+    # Línea de referencia perfecta
+    min_val = min(y_true.min(), y_pred.min())
+    max_val = max(y_true.max(), y_pred.max())
+    plt.plot([min_val, max_val], [min_val, max_val], 'r--')
+    
+    plt.tight_layout()
     plt.show()

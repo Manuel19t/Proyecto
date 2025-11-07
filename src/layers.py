@@ -12,7 +12,10 @@ def xavier_init(input_dim, output_dim):
 def initialize_weights(input_dim, output_dim, activation):
     if activation.lower() == "relu":
         return he_init(input_dim, output_dim)
-    return xavier_init(input_dim, output_dim)
+    elif activation.lower() == "linear":
+        return np.random.randn(input_dim, output_dim) * 0.01, np.zeros((1, output_dim))
+    else:
+        return xavier_init(input_dim, output_dim)
 
 class Dense:
     def __init__(self, input_dim, output_dim, activation="sigmoid", dropout_rate=0.0):

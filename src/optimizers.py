@@ -42,3 +42,4 @@ class SGD:
             v = self.momentum * v_prev - self.lr * g
             self.v[pid] = v
             p += v
+
