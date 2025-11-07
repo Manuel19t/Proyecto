@@ -1,11 +1,12 @@
 import numpy as np
 
 class Adam:
-    def __init__(self, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8):
+    def __init__(self, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.0):
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2
         self.eps = eps
+        self.weight_decay = weight_decay
         self.t = 0
         self.m = {}
         self.v = {}
@@ -17,6 +18,8 @@ class Adam:
             if pid not in self.m:
                 self.m[pid] = np.zeros_like(p)
                 self.v[pid] = np.zeros_like(p)
+            if self.weight_decay != 0.0:
+                g = g + self.weight_decay * p
             m = self.m[pid] = self.beta1 * self.m[pid] + (1 - self.beta1) * g
             v = self.v[pid] = self.beta2 * self.v[pid] + (1 - self.beta2) * (g * g)
             m_hat = m / (1 - self.beta1 ** self.t)

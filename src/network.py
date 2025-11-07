@@ -2,15 +2,27 @@ import numpy as np
 from .layers import Dense
 
 class NeuralNetwork:
-    def __init__(self, architecture, activations):
+    def __init__(self, architecture, activations, dropout_rates=None):
         assert len(activations) == len(architecture) - 1
+        
+        if dropout_rates is None:
+            dropout_rates = [0.0] * (len(architecture) -1)
+        assert len(dropout_rates) == len(architecture) - 1
+        
         self.layers = []
         for i in range(len(architecture) - 1):
-            self.layers.append(Dense(architecture[i], architecture[i + 1], activation=activations[i]))
+            self.layers.append(
+                Dense(
+                    architecture[i], 
+                    architecture[i + 1], 
+                    activation=activations[i],
+                    dropout_rate=dropout_rates[i]))
+            
 
-    def forward(self, x):
+
+    def forward(self, x, training=True):
         for layer in self.layers:
-            x = layer.forward(x)
+            x = layer.forward(x, training=training)
         return x
 
     def backward(self, grad_loss_out):
